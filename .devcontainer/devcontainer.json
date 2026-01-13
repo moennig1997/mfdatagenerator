@@ -1,0 +1,5 @@
+{
+    "name": "C++ Development Container Images",
+    "image": "mcr.microsoft.com/devcontainers/cpp",
+    "postCreateCommand": "sudo apt-get update"
+}
