@@ -57,6 +57,7 @@ int main(int argc, char *argv[]) {
 
     FILE *f_out = fopen(out_file, "wb");
     if (!f_out) {
+        fprintf(stderr, "DEBUG: trying to open '%s'\n", out_file);
         perror("Error opening output file");
         free_config(&config);
         return 1;

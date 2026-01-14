@@ -33,7 +33,8 @@ typedef enum {
 
 typedef enum {
     TEXT_TYPE_ASCII,
-    TEXT_TYPE_JAPANESE
+    TEXT_TYPE_SJIS,
+    TEXT_TYPE_ISO_2022
 } TextType;
 
 typedef struct {
@@ -48,6 +49,12 @@ typedef struct {
     unsigned char single_byte_fill; // Used if fill_type == FILL_PATTERN_HEX
     char *string_pattern;           // Used if fill_type == FILL_PATTERN_STRING
     TextType text_type;             // Used if data_mode == DATA_MODE_TEXT && fill_type == FILL_PATTERN_RANDOM
+    
+    // For Mixed JIS mode
+    unsigned char start_code[8];    // Shift-Out / Escape Sequence
+    size_t start_code_len;
+    unsigned char end_code[8];      // Shift-In / Escape Sequence
+    size_t end_code_len;
 } Config;
 
 #endif // CONFIG_H

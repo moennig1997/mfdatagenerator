@@ -64,6 +64,19 @@ int parse_definition(const char *filename, Config *config) {
     // For now, let's say default is handled in generator if fill_type is 0 and string_pattern is NULL.
     // Actually, 0 is FILL_PATTERN_STRING. Let's rely on string_pattern being NULL.
     
+    // Defaults for ISO-2022 (ISO-2022-JP)
+    // Start Code: ESC $ B (0x1B 0x24 0x42) -> JIS X 0208-1983
+    config->start_code[0] = 0x1B;
+    config->start_code[1] = 0x24;
+    config->start_code[2] = 0x42;
+    config->start_code_len = 3;
+    
+    // End Code: ESC ( B (0x1B 0x28 0x42) -> ASCII
+    config->end_code[0] = 0x1B;
+    config->end_code[1] = 0x28;
+    config->end_code[2] = 0x42;
+    config->end_code_len = 3;
+    
     while (fgets(line, sizeof(line), file)) {
         line_num++;
         char *l = trim_whitespace(line);
@@ -115,8 +128,47 @@ int parse_definition(const char *filename, Config *config) {
             }
         } else if (strcmp(key, "TEXT_TYPE") == 0) {
             if (strcmp(value, "ASCII") == 0) config->text_type = TEXT_TYPE_ASCII;
-            else if (strcmp(value, "JAPANESE") == 0) config->text_type = TEXT_TYPE_JAPANESE;
+            else if (strcmp(value, "SJIS") == 0) config->text_type = TEXT_TYPE_SJIS;
+            else if (strcmp(value, "ISO_2022") == 0) config->text_type = TEXT_TYPE_ISO_2022;
             else { fprintf(stderr, "Invalid TEXT_TYPE at line %d: %s\n", line_num, value); fclose(file); return 1; }
+        } else if (strcmp(key, "START_CODE") == 0) {
+            // Parse hex string e.g. 0x1B2442 or 0x0E
+            // We support up to 8 bytes.
+            const char *p = value;
+            if (strncmp(p, "0x", 2) == 0) p += 2;
+            
+            size_t len = strlen(p);
+            if (len % 2 != 0 || len > 16 || len == 0) {
+                 fprintf(stderr, "Invalid START_CODE length at line %d: %s\n", line_num, value); fclose(file); return 1; 
+            }
+            
+            config->start_code_len = 0;
+            for (size_t i = 0; i < len; i += 2) {
+                unsigned int byte_val;
+                if (sscanf(p + i, "%2x", &byte_val) == 1) {
+                    config->start_code[config->start_code_len++] = (unsigned char)byte_val;
+                } else {
+                     fprintf(stderr, "Invalid START_CODE hex at line %d: %s\n", line_num, value); fclose(file); return 1; 
+                }
+            }
+        } else if (strcmp(key, "END_CODE") == 0) {
+            const char *p = value;
+            if (strncmp(p, "0x", 2) == 0) p += 2;
+            
+            size_t len = strlen(p);
+            if (len % 2 != 0 || len > 16 || len == 0) {
+                 fprintf(stderr, "Invalid END_CODE length at line %d: %s\n", line_num, value); fclose(file); return 1; 
+            }
+            
+            config->end_code_len = 0;
+            for (size_t i = 0; i < len; i += 2) {
+                unsigned int byte_val;
+                if (sscanf(p + i, "%2x", &byte_val) == 1) {
+                    config->end_code[config->end_code_len++] = (unsigned char)byte_val;
+                } else {
+                     fprintf(stderr, "Invalid END_CODE hex at line %d: %s\n", line_num, value); fclose(file); return 1; 
+                }
+            }
         } else {
             fprintf(stderr, "Unknown key at line %d: %s\n", line_num, key);
             // Optionally ignore unknown keys or error out. For now, strict.

@@ -6,7 +6,7 @@
 static void fill_buffer(unsigned char *buffer, size_t length, const Config *config) {
     if (config->fill_type == FILL_PATTERN_RANDOM) {
         if (config->data_mode == DATA_MODE_TEXT) {
-            if (config->text_type == TEXT_TYPE_JAPANESE) {
+            if (config->text_type == TEXT_TYPE_SJIS) {
                 size_t i = 0;
                 while (i < length) {
                     // Decide if we want a 2-byte char or 1-byte char
@@ -74,6 +74,97 @@ static void fill_buffer(unsigned char *buffer, size_t length, const Config *conf
                         buffer[i++] = (rand() % (0x7E - 0x20 + 1)) + 0x20;
                     }
                 }
+            } else if (config->text_type == TEXT_TYPE_ISO_2022) {
+                // Mixed JIS X 0201 (SBCS) and JIS X 0208 (DBCS) with SO/SI codes
+                // Start Code = SO (Shift Out) -> to DBCS
+                // End Code = SI (Shift In) -> to SBCS
+                // Default state is SBCS.
+                
+                int is_dbcs_mode = 0; // 0 = SBCS, 1 = DBCS
+                size_t i = 0;
+                
+                while (i < length) {
+                    // Check if we need to force switch back to SBCS at end of buffer
+                    // We need at least 1 byte for End Code if we are in DBCS mode
+                    // But we also need to be careful about not starting DBCS if we don't have space for Start + 2 bytes + End
+                    
+                    int remaining = length - i;
+                    
+                    if (is_dbcs_mode) {
+                        // In DBCS mode
+                        // We must switch back if remaining space is small
+                        // Need space for End Code.
+                        
+                        int force_switch_back = (remaining <= (int)config->end_code_len);
+                        // Random chance to switch back: 30%
+                        int random_switch = ((rand() % 100) < 30);
+                        
+                        if (force_switch_back || random_switch) {
+                            // Switch back to SBCS
+                            memcpy(&buffer[i], config->end_code, config->end_code_len);
+                            i += config->end_code_len;
+                            is_dbcs_mode = 0;
+                        } else {
+                            // Continue DBCS char (2 bytes)
+                            // Need at least 2 bytes for char, PLUS space for eventual End Code?
+                            // We need remaining >= 2 + end_code_len to write a char safely.
+                            
+                            if (remaining >= 2 + (int)config->end_code_len) {
+                                // Generate JIS X 0208 char (7-bit)
+                                // ISO-2022-JP uses JIS X 0208 code points directly mapped to 0x21-0x7E range (GL)
+                                int row = 16 + (rand() % 32); // Kanji
+                                int cell = (rand() % 94) + 1;
+                                
+                                // Direct 7-bit mapping: 0x20 + row/cell
+                                unsigned char b1 = (unsigned char)(0x20 + row);
+                                unsigned char b2 = (unsigned char)(0x20 + cell);
+
+                                buffer[i++] = b1;
+                                buffer[i++] = b2;
+                            } else {
+                                // Not enough space for char + End Code
+                                // Force switch back
+                                memcpy(&buffer[i], config->end_code, config->end_code_len);
+                                i += config->end_code_len;
+                                is_dbcs_mode = 0;
+                            }
+                        }
+                    } else {
+                        // In SBCS mode
+                        // Decide to switch to DBCS? 30%
+                        // Need space: Start Code + Char (2) + End Code = minimal block
+                        
+                        int remaining = length - i;
+                        int want_switch = ((rand() % 100) < 30);
+                        
+                        if (want_switch && remaining >= (int)(config->start_code_len + 2 + config->end_code_len)) {
+                            memcpy(&buffer[i], config->start_code, config->start_code_len);
+                            i += config->start_code_len;
+                            is_dbcs_mode = 1;
+                        } else {
+                            // Write SBCS char (JIS X 0201 / ASCII)
+                            // Avoid 0x1B (ESC) in random data for ISO-2022-JP purity.
+                            // Restrict to 7-bit ASCII (0x20 - 0x7E) to avoid invalid ISO-2022-JP bytes.
+                            // 8-bit Katakana (0xA1-0xDF) requires ESC ( I invocations in ISO-2022-JP, 
+                            // but here we are treating SBCS as default ASCII state (ESC ( B).
+                            
+                            unsigned char ch;
+                            do {
+                                // ASCII only
+                                ch = (rand() % (0x7E - 0x20 + 1)) + 0x20;
+                            } while (ch == 0x1B); // Avoid ESC
+                            
+                            buffer[i++] = ch;
+                        }
+                    }
+                }
+                // Loop ends. Ensure we are in SBCS?
+                // The logic guarantees we switch back if remaining <= end_code_len.
+                // However, if we hit exact end, we must imply we are done.
+                
+                // Safety check: if we are somehow still in DBCS mode at end (shouldn't happen with correct logic),
+                // we can't do anything as buffer is full.
+                // The logic `if (remaining <= 1)` handles the last byte being End Code.
             } else {
                 for (size_t i = 0; i < length; i++) {
                     // Random printable ASCII (0x20 - 0x7E)

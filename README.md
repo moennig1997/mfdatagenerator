@@ -32,7 +32,8 @@ The definition file is a text file with `KEY=VALUE` pairs. Lines starting with `
 | | `0xHH` | Fill with specific hex byte (e.g., `0x00`, `0xFF`). |
 | | *String* | Fill with a specific looping string (e.g., `ABC`). |
 | `TEXT_TYPE` | `ASCII` | Random printable ASCII characters. |
-| | `JAPANESE` | Random Shift-JIS characters (including 2-byte Kanji/Hiragana/Katakana). |
+| | `SJIS` | Random Shift-JIS characters (including 2-byte Kanji/Hiragana/Katakana). |
+| | `ISO_2022` | Random ISO-2022-JP characters. |
 
 ## Output Specification
 
